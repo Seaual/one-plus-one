@@ -1,5 +1,8 @@
 """Tests for GitHub API crawler."""
 
+from unittest.mock import AsyncMock, patch
+
+import httpx
 import pytest
 
 from one_plus_one.crawler.github import GitHubClient
@@ -44,7 +47,7 @@ async def test_fetch_repo_success(client, httpx_mock):
 async def test_fetch_repo_not_found(client, httpx_mock):
     httpx_mock.add_response(
         url="https://api.github.com/repos/test/nope",
-        status_code=403,
+        status_code=404,
         json={"message": "Not Found"},
     )
     result = await client.fetch_repo("test", "nope")
@@ -54,9 +57,8 @@ async def test_fetch_repo_not_found(client, httpx_mock):
 @pytest.mark.asyncio
 async def test_fetch_trending_fallback(client, httpx_mock):
     """Test trending fallback with mock HTML."""
-    # Search API fails
+    # Search API fails — register a catch-all for any search URL
     httpx_mock.add_response(
-        url="https://api.github.com/search/repositories?q=created%3A%3E2026-04-09&sort=stars&order=desc&per_page=30",
         status_code=403,
     )
     # Trending page mock

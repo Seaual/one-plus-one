@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import base64
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 
 import httpx
 
@@ -42,7 +44,6 @@ class GitHubClient:
             readme_resp = await self.client.get(f"/repos/{owner}/{name}/readme")
             readme = ""
             if readme_resp.status_code == 200:
-                import base64
                 data = readme_resp.json()
                 readme = base64.b64decode(data["content"]).decode("utf-8", errors="replace")
 
@@ -67,17 +68,13 @@ class GitHubClient:
         from one_plus_one.crawler.trending import parse_trending_page
 
         try:
-            if since == "daily":
-                created = ">2026-04-09"
-            elif since == "weekly":
-                created = ">2026-04-03"
-            else:
-                created = ">2026-03-10"
+            days = {"daily": 1, "weekly": 7, "monthly": 30}.get(since, 1)
+            cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
 
             resp = await self.client.get(
                 "/search/repositories",
                 params={
-                    "q": f"created:{created}",
+                    "q": f"created:>{cutoff}",
                     "sort": "stars",
                     "order": "desc",
                     "per_page": 30,
@@ -97,17 +94,18 @@ class GitHubClient:
                     }
                     for item in items
                 ]
-        except Exception:
+        except httpx.HTTPError:
             pass
 
         # Fallback: parse trending page
         try:
-            html_resp = await httpx.AsyncClient().get(
-                f"https://github.com/trending?since={since}", timeout=30.0
-            )
-            if html_resp.status_code == 200:
-                return parse_trending_page(html_resp.text)
-        except Exception:
+            async with httpx.AsyncClient(timeout=30.0) as c:
+                html_resp = await c.get(
+                    f"https://github.com/trending?since={since}"
+                )
+                if html_resp.status_code == 200:
+                    return parse_trending_page(html_resp.text)
+        except httpx.HTTPError:
             pass
 
         return []
@@ -138,7 +136,7 @@ class GitHubClient:
                     }
                     for item in items[:limit]
                 ]
-        except Exception:
+        except httpx.HTTPError:
             pass
         return []
 
