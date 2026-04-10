@@ -1,2 +1,0 @@
-[console_scripts]
-oneplusone = one_plus_one.cli:app
