@@ -219,5 +219,67 @@ def db_info():
         print(f"No database found at {DB_PATH}")
 
 
+@app.command()
+def inspire(
+    idea: str = typer.Argument(..., help="Your project idea"),
+    top: int = typer.Option(5, help="Number of candidate projects to show"),
+    output: str = typer.Option(None, help="Save synthesis report to file"),
+):
+    """Progressive inspiration: search → select 2 → synthesize."""
+    from one_plus_one.embedder import BgeM3Embedder
+    from one_plus_one.synthesizer import Synthesizer
+    from one_plus_one.assessor import CompetitionAssessor
+
+    conn = get_db()
+    store = Store(conn)
+    embedder = BgeM3Embedder()
+    retriever = Retriever(store, embedder)
+
+    # Step 1: Search related projects
+    print(f"\n💡 Idea: {idea}")
+    print(f"\n📊 竞争度评估...")
+    candidates = retriever.search(idea, k=20)
+    assessment = CompetitionAssessor.assess(candidates, idea)
+    print(assessment["summary"])
+
+    print(f"\n📋 相关项目 (Top {min(top, len(candidates))}):")
+    if not candidates:
+        print("  未找到相关项目。尝试爬取更多数据后再试。")
+        conn.close()
+        return
+
+    for i, r in enumerate(candidates[:top], 1):
+        stars = f"{r['stars']:,}"
+        lang = f" [{r['language']}]" if r.get("language") else ""
+        print(f"  {i}. {r['full_name']} ({stars} stars){lang}")
+        print(f"     {r['description']}")
+
+    if len(candidates) < 2:
+        print("\n⚠️ 需要至少 2 个项目才能合成。请爬取更多数据。")
+        conn.close()
+        return
+
+    # Step 2: Select 2 projects (auto-select top 2 by quality_score)
+    selected = sorted(candidates[:top], key=lambda x: x.get("quality_score", 0), reverse=True)[:2]
+
+    print(f"\n🔬 自动选择 Top 2 项目进行合成...")
+    print(f"  A: {selected[0]['full_name']} (quality: {selected[0].get('quality_score', 0):.0f})")
+    print(f"  B: {selected[1]['full_name']} (quality: {selected[1].get('quality_score', 0):.0f})")
+
+    # Step 3: Synthesize
+    print(f"\n⚡ 生成组合方案...")
+    report = Synthesizer.synthesize(selected[0], selected[1])
+
+    # Step 4: Output
+    markdown = report.to_markdown()
+    print(f"\n{markdown}")
+
+    if output:
+        Path(output).write_text(markdown, encoding="utf-8")
+        print(f"\n💾 报告已保存到: {output}")
+
+    conn.close()
+
+
 if __name__ == "__main__":
     app()
