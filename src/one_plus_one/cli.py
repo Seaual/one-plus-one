@@ -54,9 +54,67 @@ def crawl_trending(
                     pid = store.insert_or_update(full)
                     print(f"    Saved: {full.full_name} (id={pid})")
             conn.close()
-            print(f"Done. Total in DB: {store.count()}")
+            print(f"Done. Total in DB: {len(repos)}")
         finally:
             await client.close()
+
+    asyncio.run(_run())
+
+
+@app.command("crawl_mass")
+def crawl_mass():
+    """Mass crawl trending (daily/weekly/monthly) + popular topics."""
+    import asyncio
+    import time
+    from one_plus_one.crawler.github import GitHubClient
+
+    async def _run():
+        token = os.environ.get("GITHUB_TOKEN")
+        if not token:
+            print("⚠️  No GITHUB_TOKEN found. Using unauthenticated API (60 req/hr limit). Will use fallbacks.")
+            
+        client = GitHubClient(token=token)
+        conn = get_db()
+        store = Store(conn)
+        
+        saved_count = 0
+        
+        # 1. Trending (all timeframes) - Uses scraper fallback
+        for since in ["daily", "weekly", "monthly"]:
+            try:
+                repos = await client.fetch_trending_repos(since)
+                print(f"Trending ({since}): {len(repos)} repos")
+                for repo in repos:
+                    full = await client.fetch_repo(repo["owner"], repo["name"])
+                    if full:
+                        # Merge initial data (stars, description) if API missed it
+                        if not full.stars and repo.get("stars"):
+                            full.stars = repo["stars"]
+                        if not full.description and repo.get("description"):
+                            full.description = repo["description"]
+                        store.insert_or_update(full)
+                        saved_count += 1
+                        print(f"  [+] {full.full_name} (⭐ {full.stars})")
+            except Exception as e:
+                print(f"Error crawling trending ({since}): {e}")
+
+        # 2. Topics - Uses API (respects rate limits)
+        topics = ["ai", "llm", "agent", "machine-learning", "generative", "rag", "local-llm"]
+        for topic in topics:
+            try:
+                repos = await client.fetch_by_topic(topic, limit=20)
+                print(f"Topic '{topic}': {len(repos)} repos")
+                for repo in repos:
+                    full = await client.fetch_repo(repo["owner"], repo["name"])
+                    if full:
+                        store.insert_or_update(full)
+                        saved_count += 1
+                    time.sleep(1.5)  # Slow down to avoid 403
+            except Exception as e:
+                print(f"Error crawling topic {topic}: {e}")
+
+        conn.close()
+        print(f"\n✅ Mass crawl finished. Saved {saved_count} new/updated projects.")
 
     asyncio.run(_run())
 
@@ -83,8 +141,9 @@ def crawl_topic(
                     if full:
                         store.insert_or_update(full)
                         print(f"  - {full.full_name}")
+            count = store.count()
             conn.close()
-            print(f"Total in DB: {store.count()}")
+            print(f"Total in DB: {count}")
         finally:
             await client.close()
 
@@ -154,7 +213,7 @@ def index(
             print(f"  Indexed {i + 1}/{len(projects)}")
 
     conn.close()
-    print(f"Done. Total indexed: {store.count()}")
+    print(f"Done. Total indexed: {len(projects)}")
 
 
 @app.command()
@@ -217,6 +276,25 @@ def db_info():
         print(f"DB size: {size:.1f} MB")
     else:
         print(f"No database found at {DB_PATH}")
+
+
+@app.command("report")
+def generate_report(
+    top: int = typer.Option(10, help="Number of projects to feature"),
+    output: str = typer.Option(None, help="Save report to file"),
+):
+    """Generate daily report of top projects."""
+    conn = get_db()
+    from one_plus_one.daily_report import generate_daily_report
+    
+    report = generate_daily_report(conn, top_k=top)
+    print(report)
+    
+    if output:
+        Path(output).write_text(report, encoding="utf-8")
+        print(f"\n💾 Report saved to: {output}")
+        
+    conn.close()
 
 
 @app.command()

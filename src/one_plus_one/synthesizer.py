@@ -64,12 +64,15 @@ class Synthesizer:
             project_a: Dict with full_name, description, stars, language, topics, readme
             project_b: Same structure as project_a
         """
-        # Try LLM-powered synthesis first
-        try:
-            return cls._synthesize_with_llm(project_a, project_b)
-        except Exception:
-            # Fallback to rule-based
-            return cls._synthesize_rule_based(project_a, project_b)
+        # Use rule-based synthesis by default to avoid hanging on CLI
+        # To enable LLM, set ONEPLUSONE_LLM=1 and ensure 'claude' is in PATH
+        import os
+        if os.environ.get("ONEPLUSONE_LLM"):
+            try:
+                return cls._synthesize_with_llm(project_a, project_b)
+            except Exception:
+                pass
+        return cls._synthesize_rule_based(project_a, project_b)
 
     @classmethod
     def _synthesize_with_llm(cls, project_a: dict, project_b: dict) -> SynthesisReport:

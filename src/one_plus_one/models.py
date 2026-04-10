@@ -88,6 +88,6 @@ def init_db(conn: sqlite3.Connection) -> None:
     # Create vec table (vec0 syntax)
     conn.execute("""
         CREATE VIRTUAL TABLE IF NOT EXISTS project_vectors
-        USING vec0(emb float[1024])
+        USING vec0(emb float[384])
     """)
     conn.commit()

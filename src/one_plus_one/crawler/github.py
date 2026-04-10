@@ -35,9 +35,15 @@ class GitHubClient:
     async def fetch_repo(self, owner: str, name: str) -> Project | None:
         """Fetch a single repository's metadata and README."""
         try:
+            # Try API first (with rate limit handling)
             repo_resp = await self.client.get(f"/repos/{owner}/{name}")
             if repo_resp.status_code == 404:
                 return None
+
+            # If rate limited, fall back to raw content fetching
+            if repo_resp.status_code == 403:
+                return await self._fetch_repo_fallback(owner, name)
+
             repo_resp.raise_for_status()
             repo = repo_resp.json()
 
@@ -46,6 +52,14 @@ class GitHubClient:
             if readme_resp.status_code == 200:
                 data = readme_resp.json()
                 readme = base64.b64decode(data["content"]).decode("utf-8", errors="replace")
+            elif readme_resp.status_code == 403:
+                # Fallback to raw README
+                try:
+                    raw_resp = await self.client.get(f"/{owner}/{name}/main/README.md")
+                    if raw_resp.status_code == 200:
+                        readme = raw_resp.text
+                except httpx.HTTPError:
+                    pass
 
             return Project(
                 owner=owner,
@@ -57,6 +71,42 @@ class GitHubClient:
                 topics=repo.get("topics", []) or [],
                 readme=readme,
             )
+        except httpx.HTTPError:
+            return await self._fetch_repo_fallback(owner, name)
+
+    async def _fetch_repo_fallback(self, owner: str, name: str) -> Project | None:
+        """Fallback: fetch from raw GitHub URLs without API."""
+        try:
+            async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as c:
+                # Try raw README
+                readme = ""
+                for branch in ["main", "master"]:
+                    resp = await c.get(f"https://raw.githubusercontent.com/{owner}/{name}/{branch}/README.md")
+                    if resp.status_code == 200:
+                        readme = resp.text
+                        break
+
+                # Try README from default branch if not found
+                if not readme:
+                    for ext in ["", ".md", ".txt", ".rst"]:
+                        for branch in ["main", "master"]:
+                            resp = await c.get(f"https://raw.githubusercontent.com/{owner}/{name}/{branch}/README{ext}")
+                            if resp.status_code == 200:
+                                readme = resp.text
+                                break
+                        if readme:
+                            break
+
+                return Project(
+                    owner=owner,
+                    name=name,
+                    description="",
+                    url=f"https://github.com/{owner}/{name}",
+                    stars=0,
+                    language="",
+                    topics=[],
+                    readme=readme,
+                )
         except httpx.HTTPError:
             return None
 

@@ -111,6 +111,32 @@ class Store:
         ).fetchall()
         return [{columns[i]: r[i] for i in range(len(columns))} for r in rows]
 
+    def get_indexed(self, limit: int = 100) -> list[dict]:
+        """Get projects that have been indexed (with vectors)."""
+        columns = ["id", "owner", "name", "full_name", "description", "url",
+                   "stars", "language", "topics", "readme", "crawled_at",
+                   "updated_at", "quality_score"]
+        rows = self.conn.execute(
+            """SELECT p.* FROM projects p
+               INNER JOIN project_vectors v ON v.rowid = p.id
+               LIMIT ?""",
+            (limit,),
+        ).fetchall()
+        return [{columns[i]: r[i] for i in range(len(columns))} for r in rows]
+
+    def get_top_projects(self, limit: int = 10) -> list[dict]:
+        """Get top projects sorted by quality_score."""
+        columns = ["id", "owner", "name", "full_name", "description", "url",
+                   "stars", "language", "topics", "readme", "crawled_at",
+                   "updated_at", "quality_score"]
+        rows = self.conn.execute(
+            """SELECT * FROM projects
+               ORDER BY quality_score DESC
+               LIMIT ?""",
+            (limit,),
+        ).fetchall()
+        return [{columns[i]: r[i] for i in range(len(columns))} for r in rows]
+
     @staticmethod
     def _row_to_project(row) -> Project:
         """Convert a DB row to Project."""

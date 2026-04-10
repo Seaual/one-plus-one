@@ -17,7 +17,7 @@ class BgeM3Embedder:
     Produces 1024-dimensional dense vectors.
     """
 
-    def __init__(self, model_name: str = "BAAI/bge-m3", device: str = "cpu"):
+    def __init__(self, model_name: str = "BAAI/bge-small-en-v1.5", device: str = "cpu"):
         from sentence_transformers import SentenceTransformer
         self._model = SentenceTransformer(
             model_name,
