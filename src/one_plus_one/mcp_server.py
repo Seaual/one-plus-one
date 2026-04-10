@@ -114,6 +114,44 @@ def db_status() -> str:
     return "\n".join(lines)
 
 
+@mcp.tool()
+def synthesize(full_name_a: str, full_name_b: str) -> str:
+    """Synthesize two projects into a combination proposal.
+
+    Args:
+        full_name_a: First project (owner/repo)
+        full_name_b: Second project (owner/repo)
+    """
+    from one_plus_one.synthesizer import Synthesizer
+
+    retriever = _get_retriever()
+    detail_a = retriever.project_detail(full_name_a)
+    detail_b = retriever.project_detail(full_name_b)
+
+    if not detail_a:
+        return f"Project '{full_name_a}' not found."
+    if not detail_b:
+        return f"Project '{full_name_b}' not found."
+
+    report = Synthesizer.synthesize(detail_a, detail_b)
+    return report.to_markdown()
+
+
+@mcp.tool()
+def assess_competition(query: str) -> str:
+    """Assess market competition for a given idea/domain.
+
+    Args:
+        query: The idea or domain to assess (e.g., "AI code review tool")
+    """
+    from one_plus_one.assessor import CompetitionAssessor
+
+    retriever = _get_retriever()
+    candidates = retriever.search(query, k=20)
+    report = CompetitionAssessor.assess(candidates, query)
+    return report["summary"]
+
+
 def run():
     """Run the MCP server."""
     mcp.run()
