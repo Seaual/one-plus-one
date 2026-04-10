@@ -6,6 +6,7 @@ import json
 import sqlite3
 
 from one_plus_one.models import Project
+from one_plus_one.quality import QualityScorer
 
 
 class Store:
@@ -16,6 +17,14 @@ class Store:
 
     def insert_or_update(self, project: Project) -> int:
         """Insert or update a project. Returns project id."""
+        # Auto-compute quality score
+        quality_score = QualityScorer.score({
+            "readme": project.readme,
+            "stars": project.stars,
+            "topics": project.topics,
+            "description": project.description,
+            "crawled_at": project.crawled_at,
+        })
         cur = self.conn.execute(
             """INSERT INTO projects (owner, name, full_name, description, url, stars,
                language, topics, readme, crawled_at, updated_at, quality_score)
@@ -27,7 +36,8 @@ class Store:
                    language=excluded.language,
                    topics=excluded.topics,
                    readme=excluded.readme,
-                   updated_at=excluded.updated_at
+                   updated_at=excluded.updated_at,
+                   quality_score=excluded.quality_score
                RETURNING id""",
             (
                 project.owner,
@@ -41,7 +51,7 @@ class Store:
                 project.readme,
                 project.crawled_at,
                 project.updated_at,
-                project.quality_score,
+                quality_score,
             ),
         )
         row = cur.fetchone()
