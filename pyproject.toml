@@ -1,0 +1,28 @@
+[project]
+name = "one-plus-one"
+version = "0.1.0"
+description = "GitHub project inspiration synthesizer - 1+1>2"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.28",
+    "lxml>=5.0",
+    "sentence-transformers>=3.0",
+    "sqlite-vec>=0.1",
+    "typer>=0.12",
+    "mcp>=1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "pytest-mock>=3.0",
+    "pytest-httpx>=0.30",
+]
+
+[project.scripts]
+oneplusone = "one_plus_one.cli:app"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
