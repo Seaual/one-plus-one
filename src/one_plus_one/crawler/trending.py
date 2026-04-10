@@ -1,65 +1,45 @@
-"""Parse GitHub trending page HTML into structured repo data.
-
-Full implementation will be done in Task 3.
-This stub handles the minimal HTML pattern needed by tests.
-"""
+"""Parse GitHub trending page HTML into structured data."""
 
 from __future__ import annotations
 
+from lxml import html
 
-def parse_trending_page(html: str) -> list[dict]:
-    """Parse GitHub trending page and return list of repo dicts.
 
-    Extracts repo name, description, and stars from article.Box-row elements.
+def parse_trending_page(html_content: str) -> list[dict]:
+    """Parse github.com/trending HTML into a list of repo dicts.
+
+    Each dict: {owner, name, description, stars, url}
     """
-    results: list[dict] = []
+    tree = html.fromstring(html_content)
+    rows = tree.xpath('//article[@class="Box-row"]')
 
-    # Split into individual row blocks
-    rows = html.split('<article class="Box-row">')
+    results = []
+    for row in rows:
+        # Repo link: /owner/name
+        link_el = row.xpath('.//h2/a[@href]')
+        if not link_el:
+            continue
+        href = link_el[0].get("href", "").strip("/")
+        parts = href.split("/")
+        if len(parts) != 2:
+            continue
+        owner, name = parts
 
-    for row in rows[1:]:  # skip first split fragment
-        # Extract repo path from <h2><a href="/owner/name">
-        repo_path = ""
-        start = row.find('<a href="/')
-        if start != -1:
-            end = row.find('"', start + 10)
-            if end != -1:
-                repo_path = row[start + 10:end].strip("/")
+        # Description
+        desc_els = row.xpath(".//p[@class='col-9 color-fg-muted my-1 pr-4']")
+        description = desc_els[0].text_content().strip() if desc_els else ""
 
-        # Extract description from <p> tag
-        desc = ""
-        p_start = row.find("<p>")
-        if p_start != -1:
-            p_end = row.find("</p>", p_start)
-            if p_end != -1:
-                desc = row[p_start + 3:p_end].strip()
+        # Stars (text like "4,200 stars this week")
+        star_els = row.xpath('.//a[contains(@href, "/stargazers")]')
+        stars_text = star_els[0].text_content().strip() if star_els else "0"
+        stars = int(stars_text.replace(",", "").split()[0]) if stars_text else 0
 
-        # Extract stars count
-        stars = 0
-        stars_marker = '<span class="d-inline-block float-sm-right">'
-        s_start = row.find(stars_marker)
-        if s_start != -1:
-            s_start += len(stars_marker)
-            s_end = row.find("</span>", s_start)
-            if s_end != -1:
-                stars_text = row[s_start:s_end].strip().replace(",", "")
-                try:
-                    stars = int(stars_text)
-                except ValueError:
-                    stars = 0
-
-        if repo_path:
-            parts = repo_path.split("/")
-            owner = parts[0] if len(parts) >= 1 else ""
-            name = parts[1] if len(parts) >= 2 else ""
-            results.append({
-                "owner": owner,
-                "name": name,
-                "description": desc,
-                "stars": stars,
-                "language": "",
-                "topics": [],
-                "url": f"https://github.com/{repo_path}",
-            })
+        results.append({
+            "owner": owner,
+            "name": name,
+            "description": description,
+            "stars": stars,
+            "url": f"https://github.com/{owner}/{name}",
+        })
 
     return results
