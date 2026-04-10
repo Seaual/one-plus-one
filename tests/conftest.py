@@ -4,7 +4,6 @@ import sqlite3
 from unittest.mock import MagicMock
 
 import pytest
-import sqlite_vec
 
 from one_plus_one.models import init_db
 
@@ -13,8 +12,6 @@ from one_plus_one.models import init_db
 def db_conn():
     """In-memory SQLite database with extensions loaded."""
     conn = sqlite3.connect(":memory:")
-    conn.enable_load_extension(True)
-    sqlite_vec.load(conn)
     init_db(conn)
     yield conn
     conn.close()

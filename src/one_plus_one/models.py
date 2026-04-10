@@ -45,9 +45,7 @@ class Project:
         )
 
     def to_dict(self) -> dict:
-        d = asdict(self)
-        d["topics"] = self.topics
-        return d
+        return asdict(self)
 
 
 def init_db(conn: sqlite3.Connection) -> None:

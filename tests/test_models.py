@@ -67,10 +67,12 @@ class TestInitDB:
             ("test", "repo", "test/repo", "https://github.com/test/repo", 100),
         )
         db_conn.commit()
-        row = db_conn.execute("SELECT * FROM projects").fetchone()
-        assert row[1] == "test"
-        assert row[2] == "repo"
-        assert row[6] == 100
+        row = db_conn.execute(
+            "SELECT owner, name, stars FROM projects"
+        ).fetchone()
+        assert row[0] == "test"
+        assert row[1] == "repo"
+        assert row[2] == 100
 
     def test_unique_full_name(self, db_conn):
         db_conn.execute(
@@ -79,7 +81,7 @@ class TestInitDB:
             ("test", "repo", "test/repo", "https://github.com/test/repo"),
         )
         db_conn.commit()
-        with pytest.raises(Exception):  # UNIQUE constraint
+        with pytest.raises(sqlite3.IntegrityError):  # UNIQUE constraint
             db_conn.execute(
                 """INSERT INTO projects (owner, name, full_name, url, crawled_at, updated_at)
                    VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))""",
